@@ -1,0 +1,7 @@
+#!/bin/bash
+
+set -e
+
+# CODEBUILD_BUILD_NUMBER provided by AWS CodeBuild environment
+
+sed -ie "s/^THEME_CACHE_TOKEN.*/THEME_CACHE_TOKEN=$CODEBUILD_BUILD_NUMBER/" .env

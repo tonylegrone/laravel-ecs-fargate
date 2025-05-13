@@ -1,0 +1,88 @@
+services:
+    app:
+        container_name: app
+        build:
+            context: .
+            dockerfile: ./Dockerfile.local
+            target: app
+            args:
+                - APP_ENV=${APP_ENV}
+        environment:
+            APP_ENV: ${APP_ENV}
+            REDIS_HOST: redis
+        working_dir: /var/www
+        volumes:
+            - ./:/var/www
+        ports:
+            - 9000:9000
+
+    server:
+        container_name: server
+        build:
+            context: .
+            dockerfile: ./Dockerfile.local
+            target: server
+        environment:
+            VIRTUAL_HOST: ${APP_HOST}
+        extra_hosts:
+            - "host.docker.internal:host-gateway"
+        working_dir: /var/www
+        volumes:
+            - ./public:/var/www/public
+        networks:
+            - default
+            - nginx-proxy
+        ports:
+            - ${APP_PORT}:8080
+
+    composer:
+        container_name: composer
+        build:
+            context: .
+            dockerfile: ./Dockerfile.local
+            target: composer
+            secrets:
+                - ssh_key
+        volumes:
+            - .:/app
+            - ${HOME}/.ssh:/root/.ssh:ro
+        tty: true
+        secrets:
+            - ssh_key
+
+    node:
+        container_name: node
+        build:
+            context: .
+            dockerfile: ./Dockerfile.local
+            target: node
+        volumes:
+            - .:/app
+        networks:
+            default:
+            nginx-proxy:
+                aliases:
+                    - ${APP_HOST}
+        tty: true
+        expose:
+            - "5173"
+            - "5174"
+        ports:
+            - "5173:5173"
+            - "5174:5174"
+
+    redis:
+        container_name: redis
+        image: redis:latest
+        restart: always
+        ports:
+            - "6379:6379"
+
+secrets:
+    ssh_key:
+        file: ${HOME}/.ssh/id_rsa
+
+networks:
+    nginx-proxy:
+        external: true
+        name: nginx-proxy

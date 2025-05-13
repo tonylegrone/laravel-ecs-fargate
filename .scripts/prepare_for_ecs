@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+# Update appspec with task arn
+TASK_ARN=$(aws ecs describe-task-definition --task-definition "$ECS_TASK_NAME" --query taskDefinition.taskDefinitionArn);
+
+sed -ie "s,\"<TASK_ARN>\",$TASK_ARN," appspec.yml

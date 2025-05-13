@@ -1,0 +1,37 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo Nothing to do in the pre_build phase...
+      - aws ssm get-parameter --name $BUILD_PEM --with-decryption --output text --query Parameter.Value > /root/.ssh/id_rsa
+      - aws ssm get-parameter --name $ENV_PARAM_KEY --with-decryption --output text --query Parameter.Value > .env
+      - aws ssm get-parameter --name $CWAGENT_CONFIG --with-decryption --output text --query Parameter.Value > cwagentconfig
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REPOSITORY
+      - aws ecs describe-task-definition --task-definition $ECS_TASK_NAME --query taskDefinition > taskDefinition.json
+      - mv $DOCKERFILE Dockerfile
+      - .scripts/prepare_for_ecs
+  build:
+    commands:
+      - echo Build started on `date`
+      - .scripts/set_cache_token
+      - docker build --target app -t $APP_IMAGE --secret id=ssh_key,src=/root/.ssh/id_rsa .
+      - docker tag $APP_IMAGE:$IMAGE_TAG $REPOSITORY/$APP_IMAGE:$IMAGE_TAG
+      - docker build --target server -t $SERVER_IMAGE .
+      - docker tag $SERVER_IMAGE:$IMAGE_TAG $REPOSITORY/$SERVER_IMAGE:$IMAGE_TAG
+  post_build:
+    commands:
+      - docker image ls -a
+      - docker push $REPOSITORY/$APP_IMAGE:$IMAGE_TAG
+      - docker push $REPOSITORY/$SERVER_IMAGE:$IMAGE_TAG
+      - printf '[{"name":"frontend-app","imageUri":"%s"}, {"name":"frontend-server","imageUri":"%s"}]' $REPOSITORY/$APP_IMAGE:$IMAGE_TAG $REPOSITORY/$SERVER_IMAGE:$IMAGE_TAG> imageDetail.json
+      - echo Build completed on `date`
+artifacts:
+  files:
+    - 'imageDetail.json'
+    - 'taskDefinition.json'
+    - 'appspec.yml'
+cache:
+  paths:
+    - 'node_modules/**/*'
+    - 'vendor/**/*'
